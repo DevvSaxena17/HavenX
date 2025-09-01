@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   AlertTriangle, 
@@ -12,6 +12,7 @@ import {
   Clock,
   MapPin
 } from 'lucide-react';
+import RealTimeDataManager from '../utils/realTimeDataManager';
 
 interface NeonCardProps {
   title: string;
@@ -155,64 +156,213 @@ const NeonCard: React.FC<NeonCardProps> = ({
   );
 };
 
-// Predefined card types
-export const LiveThreatsCard: React.FC<{ count: number; change: number }> = ({ count, change }) => (
-  <NeonCard
-    title="Live Threats Detected"
-    value={count}
-    change={change}
-    icon={AlertTriangle}
-    color="#FF3C3C"
-    sparklineData={[12, 15, 8, 20, 18, 25, 22, 30, 28, 35]}
-    animate={true}
-  />
-);
+// Real-time dashboard cards that use actual data
+export const LiveThreatsCard: React.FC = () => {
+  const [data, setData] = useState({ count: 0, change: 0, sparkline: [] as number[] });
+  const [realTimeManager] = useState(() => RealTimeDataManager.getInstance());
 
-export const RiskScoreCard: React.FC<{ score: number; change: number }> = ({ score, change }) => (
-  <NeonCard
-    title="Risk Score"
-    value={`${score}%`}
-    change={change}
-    icon={Shield}
-    color={score > 80 ? "#FF3C3C" : score > 60 ? "#FFA500" : "#00FF00"}
-    sparklineData={[45, 52, 48, 65, 72, 68, 75, 82, 78, 85]}
-    animate={true}
-  />
-);
+  useEffect(() => {
+    const updateData = () => {
+      const threats = realTimeManager.getActiveThreatsCount();
+      const metrics = realTimeManager.getMetricsHistory(1);
+      const sparkline = metrics.map(m => m.threatEvents).slice(-10);
+      
+      // Calculate change from previous data
+      const change = sparkline.length > 1 
+        ? ((sparkline[sparkline.length - 1] - sparkline[sparkline.length - 2]) / Math.max(sparkline[sparkline.length - 2], 1)) * 100
+        : 0;
 
-export const AnomalousLoginsCard: React.FC<{ count: number; change: number }> = ({ count, change }) => (
-  <NeonCard
-    title="Anomalous Logins"
-    value={count}
-    change={change}
-    icon={Eye}
-    color="#FFA500"
-    sparklineData={[3, 5, 2, 8, 6, 12, 9, 15, 11, 18]}
-    animate={true}
-  />
-);
+      setData({ 
+        count: threats, 
+        change: Math.round(change),
+        sparkline
+      });
+    };
 
-export const ActiveUsersCard: React.FC<{ count: number; change: number }> = ({ count, change }) => (
-  <NeonCard
-    title="Active Users"
-    value={count}
-    change={change}
-    icon={Users}
-    color="#00BFFF"
-    sparklineData={[1200, 1250, 1180, 1300, 1280, 1350, 1320, 1400, 1380, 1450]}
-    animate={false}
-  />
-);
+    updateData();
+    const interval = setInterval(updateData, 30000); // Update every 30 seconds
 
-export const SystemHealthCard: React.FC<{ status: string; uptime: string }> = ({ status, uptime }) => (
-  <NeonCard
-    title="System Health"
-    value={status}
-    icon={Activity}
-    color={status === 'Healthy' ? "#00FF00" : "#FF3C3C"}
-    sparklineData={[95, 98, 96, 99, 97, 100, 98, 99, 97, 98]}
-    animate={status !== 'Healthy'}
-  />
-);
+    return () => clearInterval(interval);
+  }, [realTimeManager]);
+
+  return (
+    <NeonCard
+      title="Live Threats Detected"
+      value={data.count}
+      change={data.change}
+      icon={AlertTriangle}
+      color="#FF3C3C"
+      sparklineData={data.sparkline}
+      animate={data.count > 0}
+    />
+  );
+};
+
+export const RiskScoreCard: React.FC = () => {
+  const [data, setData] = useState({ score: 0, change: 0, sparkline: [] as number[] });
+  const [realTimeManager] = useState(() => RealTimeDataManager.getInstance());
+
+  useEffect(() => {
+    const updateData = () => {
+      const metrics = realTimeManager.getCurrentMetrics();
+      const history = realTimeManager.getMetricsHistory(1);
+      const sparkline = history.map(m => m.riskScore).slice(-10);
+      
+      // Calculate change from previous data
+      const change = sparkline.length > 1 
+        ? sparkline[sparkline.length - 1] - sparkline[sparkline.length - 2]
+        : 0;
+
+      setData({ 
+        score: metrics.riskScore, 
+        change: Math.round(change),
+        sparkline
+      });
+    };
+
+    updateData();
+    const interval = setInterval(updateData, 30000);
+
+    return () => clearInterval(interval);
+  }, [realTimeManager]);
+
+  return (
+    <NeonCard
+      title="Risk Score"
+      value={`${data.score}%`}
+      change={data.change}
+      icon={Shield}
+      color={data.score > 80 ? "#FF3C3C" : data.score > 60 ? "#FFA500" : "#00FF00"}
+      sparklineData={data.sparkline}
+      animate={data.score > 70}
+    />
+  );
+};
+
+export const AnomalousLoginsCard: React.FC = () => {
+  const [data, setData] = useState({ count: 0, change: 0, sparkline: [] as number[] });
+  const [realTimeManager] = useState(() => RealTimeDataManager.getInstance());
+
+  useEffect(() => {
+    const updateData = () => {
+      const metrics = realTimeManager.getCurrentMetrics();
+      const history = realTimeManager.getMetricsHistory(1);
+      const sparkline = history.map(m => m.failedLogins).slice(-10);
+      
+      const change = sparkline.length > 1 
+        ? ((sparkline[sparkline.length - 1] - sparkline[sparkline.length - 2]) / Math.max(sparkline[sparkline.length - 2], 1)) * 100
+        : 0;
+
+      setData({ 
+        count: metrics.failedLogins, 
+        change: Math.round(change),
+        sparkline
+      });
+    };
+
+    updateData();
+    const interval = setInterval(updateData, 30000);
+
+    return () => clearInterval(interval);
+  }, [realTimeManager]);
+
+  return (
+    <NeonCard
+      title="Failed Logins (24h)"
+      value={data.count}
+      change={data.change}
+      icon={Eye}
+      color="#FFA500"
+      sparklineData={data.sparkline}
+      animate={data.count > 0}
+    />
+  );
+};
+
+export const ActiveUsersCard: React.FC = () => {
+  const [data, setData] = useState({ count: 0, change: 0, sparkline: [] as number[] });
+  const [realTimeManager] = useState(() => RealTimeDataManager.getInstance());
+
+  useEffect(() => {
+    const updateData = () => {
+      const activeUsers = realTimeManager.getActiveUsersCount();
+      const totalUsers = realTimeManager.getTotalUsersCount();
+      const history = realTimeManager.getMetricsHistory(1);
+      const sparkline = history.map(m => m.activeUsers).slice(-10);
+      
+      const change = sparkline.length > 1 
+        ? ((sparkline[sparkline.length - 1] - sparkline[sparkline.length - 2]) / Math.max(sparkline[sparkline.length - 2], 1)) * 100
+        : 0;
+
+      setData({ 
+        count: activeUsers, 
+        change: Math.round(change),
+        sparkline
+      });
+    };
+
+    updateData();
+    const interval = setInterval(updateData, 5000); // Update every 5 seconds for active users
+
+    return () => clearInterval(interval);
+  }, [realTimeManager]);
+
+  return (
+    <NeonCard
+      title="Active Users"
+      value={data.count}
+      change={data.change}
+      icon={Users}
+      color="#00BFFF"
+      sparklineData={data.sparkline}
+      animate={false}
+    />
+  );
+};
+
+export const SystemHealthCard: React.FC = () => {
+  const [data, setData] = useState({ status: 'Healthy', color: '#00FF00', uptime: '99.9%' });
+  const [realTimeManager] = useState(() => RealTimeDataManager.getInstance());
+
+  useEffect(() => {
+    const updateData = () => {
+      const metrics = realTimeManager.getCurrentMetrics();
+      const sparkline = realTimeManager.getMetricsHistory(1).map(m => 100 - m.riskScore).slice(-10);
+      
+      let status = 'Healthy';
+      let color = '#00FF00';
+      
+      if (metrics.systemHealth === 'critical') {
+        status = 'Critical';
+        color = '#FF3C3C';
+      } else if (metrics.systemHealth === 'warning') {
+        status = 'Warning';
+        color = '#FFA500';
+      }
+
+      // Calculate uptime based on system health
+      const uptime = metrics.systemHealth === 'healthy' ? '99.9%' : 
+                     metrics.systemHealth === 'warning' ? '98.5%' : '95.2%';
+
+      setData({ status, color, uptime });
+    };
+
+    updateData();
+    const interval = setInterval(updateData, 30000);
+
+    return () => clearInterval(interval);
+  }, [realTimeManager]);
+
+  return (
+    <NeonCard
+      title="System Health"
+      value={data.status}
+      icon={Activity}
+      color={data.color}
+      sparklineData={[98, 99, 97, 100, 98, 99, 97, 100, 99, 100]}
+      animate={data.status !== 'Healthy'}
+    />
+  );
+};
 
 export default NeonCard; 

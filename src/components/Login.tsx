@@ -49,7 +49,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error }) => {
             <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#FF3C3C' }}>
               <Shield className="w-8 h-8 text-white" />
             </div>
-            <span className="text-3xl font-bold text-white">ShadowHawk</span>
+            <span className="text-3xl font-bold text-white">HavenX</span>
           </div>
           <p className="text-[#B0B0B0] text-lg">Enterprise Security Center</p>
           <p className="text-[#B0B0B0] text-sm mt-2">Insider Threat Detection System</p>
@@ -60,8 +60,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error }) => {
           <h2 className="text-2xl font-bold text-white mb-6 text-center">Sign In</h2>
           
           {error && (
-            <div className="mb-4 p-3 rounded border" style={{ backgroundColor: '#FF3C3C', borderColor: '#FF3C3C', opacity: 0.1 }}>
-              <p className="text-[#FF3C3C] text-sm">{error}</p>
+            <div className="mb-4 p-3 rounded border bg-red-900 border-red-500">
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">!</span>
+                </div>
+                <p className="text-red-200 text-sm font-medium">{error}</p>
+              </div>
             </div>
           )}
           
@@ -161,7 +166,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error }) => {
           {/* Footer */}
           <div className="mt-6 text-center">
             <p className="text-[#B0B0B0] text-sm">
-              Secure access to ShadowHawk Security Dashboard
+              Secure access to HavenX Security Dashboard
             </p>
           </div>
         </div>

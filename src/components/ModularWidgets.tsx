@@ -134,12 +134,12 @@ const ModularWidgets: React.FC<ModularWidgetsProps> = ({ userRole }) => {
       timestamp: new Date().toISOString()
     };
     
-    localStorage.setItem('shadowhawk_layout', JSON.stringify(layoutData));
+            localStorage.setItem('havenx_layout', JSON.stringify(layoutData));
     alert('Layout saved successfully!');
   };
 
   const loadLayout = () => {
-    const savedLayout = localStorage.getItem('shadowhawk_layout');
+          const savedLayout = localStorage.getItem('havenx_layout');
     if (savedLayout) {
       const layoutData = JSON.parse(savedLayout);
       setWidgets(layoutData.widgets);
@@ -158,7 +158,7 @@ const ModularWidgets: React.FC<ModularWidgetsProps> = ({ userRole }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `shadowhawk-layout-${selectedLayout}.json`;
+            a.download = `havenx-layout-${selectedLayout}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

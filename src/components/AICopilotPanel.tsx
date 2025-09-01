@@ -1,5 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import CSVManager from '../utils/csvManager';
+import TimeUtils from '../utils/timeUtils';
+import RealTimeDataManager from '../utils/realTimeDataManager';
+import AIEnhancedManager from '../utils/aiEnhanced';
+import { secureStorage, logSecurityEvent, rateLimiter } from '../utils/securityUtils';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Brain, 
   Send, 
@@ -14,8 +20,60 @@ import {
   ChevronRight,
   Settings,
   History,
-  FileText
+  FileText,
+  Search,
+  Filter,
+  MoreVertical,
+  Calendar,
+  Mail,
+  Key,
+  Globe,
+  Monitor,
+  HardDrive,
+  Shield,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  TrendingUp,
+  BarChart3,
+  PieChart as PieChartIcon,
+  LineChart as LineChartIcon,
+  BarChart as BarChartIcon,
+  Lock,
+  Database,
+  Server,
+  Network,
+  ShieldCheck,
+  AlertCircle,
+  User,
+  Clock,
+  MapPin,
+  Smartphone,
+  Activity
 } from 'lucide-react';
+// Enhanced Recharts imports
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar
+} from 'recharts';
 
 interface Message {
   id: string;
@@ -23,6 +81,8 @@ interface Message {
   content: string;
   timestamp: Date;
   isCommand?: boolean;
+  category?: string;
+  confidence?: number;
 }
 
 interface AICopilotPanelProps {
@@ -37,8 +97,37 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
   const [isListening, setIsListening] = useState(false);
   const [isCommandMode, setIsCommandMode] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [showSettings, setShowSettings] = useState(false);
+  const [aiInsights, setAiInsights] = useState<any[]>([]);
+  const [csvManager] = useState(() => CSVManager.getInstance());
+  const [timeUtils] = useState(() => TimeUtils.getInstance());
+  const [realTimeManager] = useState(() => RealTimeDataManager.getInstance());
+  const [aiManager] = useState(() => AIEnhancedManager.getInstance());
+  const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  // Enhanced mock data
+  const aiInsightsData = [
+    { category: 'Security', insights: 15, critical: 3, resolved: 12 },
+    { category: 'Performance', insights: 8, critical: 1, resolved: 7 },
+    { category: 'Compliance', insights: 12, critical: 2, resolved: 10 },
+    { category: 'User Behavior', insights: 20, critical: 5, resolved: 15 },
+  ];
+
+  const conversationStats = [
+    { day: 'Mon', queries: 12, accuracy: 95 },
+    { day: 'Tue', queries: 18, accuracy: 92 },
+    { day: 'Wed', queries: 15, accuracy: 98 },
+    { day: 'Thu', queries: 22, accuracy: 89 },
+    { day: 'Fri', queries: 16, accuracy: 94 },
+    { day: 'Sat', queries: 8, accuracy: 96 },
+    { day: 'Sun', queries: 5, accuracy: 100 },
+  ];
+
+  const COLORS = ['#00C49F', '#FFBB28', '#FF8042', '#0088FE', '#8884D8'];
 
   // Smart suggestions based on user role
   const getSmartSuggestions = () => {
@@ -54,20 +143,26 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
         "Unusual logins in the last 24h?",
         "Users with highest risk scores?",
         "Export threat report for today",
-        "Show system health metrics"
+        "Show system health metrics",
+        "Analyze network traffic patterns",
+        "Check compliance violations"
       ],
       analyst: [
         "What was my last login time?",
         "How can I improve my security score?",
         "Report suspicious activity",
         "Request access to sensitive data",
-        "Check my activity logs"
+        "Check my activity logs",
+        "Analyze my risk profile",
+        "Get security recommendations"
       ],
       viewer: [
         "What was my last login time?",
         "How can I secure my device?",
         "What are the basic security rules?",
-        "Contact support team"
+        "Contact support team",
+        "Check my training progress",
+        "Report a security concern"
       ]
     };
 
@@ -79,7 +174,7 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
   // Initialize speech recognition
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
@@ -105,6 +200,27 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
+    // Check rate limiting for copilot usage
+    if (!rateLimiter.isAllowed(user?.id || 'anonymous', userRole === 'admin' ? 10 : userRole === 'analyst' ? 5 : 3, 60000)) {
+      const rateLimitMessage: Message = {
+        id: Date.now().toString(),
+        type: 'ai',
+        content: '⚠️ **Rate Limit Exceeded**\n\nToo many requests. Please wait before sending another message.',
+        timestamp: new Date(),
+        category: 'System',
+        confidence: 100
+      };
+      setMessages(prev => [...prev, rateLimitMessage]);
+      return;
+    }
+
+    // Log security event for AI copilot query
+    logSecurityEvent({
+      type: 'ai_copilot_query',
+      severity: 'low',
+      details: { query: inputValue, userId: user?.id, userRole, isCommand: isCommandMode }
+    });
+
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
@@ -114,71 +230,120 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentQuery = inputValue;
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(inputValue, userRole);
+    try {
+      // Use enhanced AI system for query processing
+      const aiResult = aiManager.processNaturalLanguageQuery(currentQuery);
+      
+      // Simulate realistic AI processing delay
+      await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1500));
+      
+      // Enhance response with copilot-specific context
+      let enhancedResponse = aiResult.response;
+      
+      // Add role-specific enhancements
+      if (userRole === 'admin' && (currentQuery.toLowerCase().includes('users') || currentQuery.toLowerCase().includes('team'))) {
+        const users = csvManager.getAllUsers();
+        enhancedResponse += `\n\n---\n**System Users:**\n${users.map(u => `• ${u.name} (${u.role}) - Score: ${u.securityScore}`).join('\n')}`;
+      }
+      
+      // Add behavioral insights if available
+      if (currentQuery.toLowerCase().includes('behavior') || currentQuery.toLowerCase().includes('anomaly')) {
+        enhancedResponse += `\n\n---\n**Behavioral Analysis:** Real-time monitoring active. No unusual patterns detected in the last 24 hours.`;
+      }
+      
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: aiResponse,
+        content: enhancedResponse,
         timestamp: new Date(),
-        isCommand: isCommandMode
+        category: getMessageCategory(currentQuery),
+        confidence: aiResult.confidence * 100
       };
+
       setMessages(prev => [...prev, aiMessage]);
       setIsTyping(false);
-    }, 1000 + Math.random() * 2000);
+      
+    } catch (error) {
+      console.error('AI Copilot Error:', error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: '❌ **Error Processing Query**\n\nSorry, I encountered an issue processing your request. Please try again or contact support.',
+        timestamp: new Date(),
+        category: 'Error',
+        confidence: 0
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setIsTyping(false);
+      
+      logSecurityEvent({
+        type: 'ai_copilot_error',
+        severity: 'medium',
+        details: { query: currentQuery, error: error.message, userId: user?.id }
+      });
+    }
   };
 
   const generateAIResponse = (input: string, role: string): string => {
     const lowerInput = input.toLowerCase();
     
-    if (role === 'admin') {
-      if (lowerInput.includes('download') || lowerInput.includes('file')) {
-        return "📊 **File Download Analysis**\n\nToday's largest file downloads:\n• John Smith: 2.5GB project files (10:30 AM)\n• Sarah Johnson: 1.8GB client data (2:15 PM)\n• Mike Davis: 3.2GB financial reports (11:45 AM)\n\n⚠️ **Alert**: Mike Davis downloaded sensitive financial data outside business hours.";
-      }
-      if (lowerInput.includes('login') || lowerInput.includes('unusual')) {
-        return "🔍 **Unusual Login Activity**\n\nSuspicious logins detected:\n• IP: 192.168.1.105 (Unknown device)\n• Time: 3:45 AM (Outside business hours)\n• User: mike.davis@company.com\n• Location: Remote (VPN detected)\n\n🚨 **Action Required**: Review and potentially block this session.";
-      }
-      if (lowerInput.includes('risk') || lowerInput.includes('score')) {
-        return "📈 **Risk Score Analysis**\n\nTop 5 High-Risk Users:\n1. Mike Davis: 92% (Suspended)\n2. Alice Johnson: 85% (Under review)\n3. Bob Wilson: 78% (Warning sent)\n4. Carol Brown: 72% (Monitoring)\n5. David Lee: 68% (Normal)\n\n💡 **Recommendation**: Implement additional monitoring for users above 80%.";
-      }
+            if (lowerInput.includes('login') || lowerInput.includes('access')) {
+          const device = role === 'admin' ? 'MacBook Pro' : role === 'analyst' ? 'Dell XPS' : 'Windows PC';
+          const location = role === 'analyst' ? 'Remote' : 'Office';
+          const currentTime = timeUtils.getCurrentTimeInfo();
+          return `Based on your role as ${role}, here are your recent login activities:\n\n• Current time: ${currentTime.formattedTime}\n• Last login: ${timeUtils.formatForActivity(new Date(Date.now() - 2 * 60 * 60 * 1000))}\n• Device: ${device}\n• Location: ${location}\n• Status: Active\n\nAll login attempts are being monitored for security purposes.`;
+        }
+    
+    if (lowerInput.includes('security score') || lowerInput.includes('risk')) {
+      const users = csvManager.getAllUsers();
+      const currentUser = users.find(u => u.role === role);
+      const securityScore = currentUser?.securityScore || 85;
+      
+      return `Security Status for ${role}:\n\n• Security Score: ${securityScore}/100\n• Risk Level: ${securityScore >= 80 ? 'Low' : securityScore >= 60 ? 'Medium' : 'High'}\n• Last Security Scan: 1 hour ago\n• Compliance Status: ✅ Good\n\nNo immediate security concerns detected.`;
     }
-
-    if (role === 'analyst') {
-      if (lowerInput.includes('login') || lowerInput.includes('time')) {
-        return "🕐 **Your Login History**\n\nRecent logins:\n• Today: 9:30 AM (Office - MacBook Pro)\n• Yesterday: 9:00 AM (Office - MacBook Pro)\n• 2 days ago: 8:45 AM (Office - MacBook Pro)\n\n✅ All logins appear normal from your usual devices.";
-      }
-      if (lowerInput.includes('security') || lowerInput.includes('score')) {
-        return "🛡️ **Your Security Score: 85%**\n\nStrengths:\n✅ Strong password\n✅ 2FA enabled\n✅ Regular device usage\n\nImprovements:\n⚠️ Password is 30 days old\n💡 Consider changing password\n💡 Review login devices";
-      }
+    
+    if (lowerInput.includes('users') || lowerInput.includes('team')) {
+      const users = csvManager.getAllUsers();
+      const userList = users.map(u => `• ${u.name} (${u.role})`).join('\n');
+      return `Current Team Members:\n\n${userList}\n\nTotal Users: ${users.length}\nActive Users: ${users.filter(u => u.isActive).length}`;
     }
-
-    if (role === 'viewer') {
-      if (lowerInput.includes('login') || lowerInput.includes('time')) {
-        return "🕐 **Your Last Login**\n\nLast login: Today, 9:00 AM\nDevice: Company Laptop\nLocation: Office\n\n✅ Login appears normal from your assigned device.";
-      }
-      if (lowerInput.includes('secure') || lowerInput.includes('device')) {
-        return "🔒 **Device Security Tips**\n\n1. Always lock your computer when stepping away\n2. Use only company-approved devices\n3. Never share your login credentials\n4. Report any suspicious emails\n5. Keep your device updated\n\n💡 Contact support if you notice anything unusual.";
-      }
+    
+    if (lowerInput.includes('suspicious') || lowerInput.includes('report')) {
+              return `I've logged your concern. For immediate assistance, please contact the security team at security@havenx.com or use the "Report Incident" button in your dashboard.`;
     }
+    
+    if (role === 'admin' && lowerInput.includes('download')) {
+              return `Today's largest file downloads: 1) Priyanshi Saxena - 2.3GB security reports, 2) Mohak - 1.8GB engineering files, 3) Tushar Suthar - 950MB marketing data. All downloads were authorized.`;
+    }
+    
+    if (role === 'admin' && lowerInput.includes('unusual')) {
+      return `Unusual login activity detected: 1) Login from new IP (192.168.1.150) at 2:30 AM, 2) Multiple failed attempts from user ID 8472, 3) Access from non-corporate network. Recommend investigation.`;
+    }
+    
+    return `Hello! I'm your AI security assistant. As a ${role}, you have access to:\n\n• Activity monitoring\n• Security reports\n• Risk assessments\n• Compliance tracking\n\nHow can I help you today?`;
+  };
 
-    return "🤖 I understand you're asking about: " + input + "\n\nI'm here to help with security-related questions. Try asking about your login history, security score, or report suspicious activity.";
+  const getMessageCategory = (input: string): string => {
+    const lowerInput = input.toLowerCase();
+    if (lowerInput.includes('login') || lowerInput.includes('access')) return 'Authentication';
+    if (lowerInput.includes('security') || lowerInput.includes('risk')) return 'Security';
+    if (lowerInput.includes('download') || lowerInput.includes('export')) return 'Data Access';
+    if (lowerInput.includes('report') || lowerInput.includes('suspicious')) return 'Incident';
+    return 'General';
   };
 
   const handleVoiceInput = () => {
-    if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in your browser');
-      return;
-    }
-
     if (isListening) {
-      recognitionRef.current.stop();
+      recognitionRef.current?.stop();
       setIsListening(false);
     } else {
-      recognitionRef.current.start();
+      recognitionRef.current?.start();
       setIsListening(true);
     }
   };
@@ -188,23 +353,82 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
   };
 
   const downloadInsights = () => {
-    const insights = messages
-      .filter(msg => msg.type === 'ai')
-      .map(msg => `${msg.timestamp.toLocaleString()}: ${msg.content}`)
-      .join('\n\n');
-
-    const blob = new Blob([insights], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ai-insights-${new Date().toISOString().split('T')[0]}.txt`;
-    a.click();
+    const dataStr = JSON.stringify(messages, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ai-copilot-conversation.json';
+    link.click();
     URL.revokeObjectURL(url);
   };
 
   const clearHistory = () => {
     setMessages([]);
   };
+
+  const filteredMessages = messages.filter(message =>
+    message.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (message.category && message.category.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const renderEnhancedCharts = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      {/* Conversation Statistics */}
+      <div className="rounded-lg border p-4" style={{ backgroundColor: '#1A1A1A', borderColor: '#B0B0B0' }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Conversation Stats</h3>
+          <TrendingUp className="h-5 w-5 text-green-400" />
+        </div>
+        <ResponsiveContainer width="100%" height={150}>
+          <AreaChart data={conversationStats}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+            <XAxis dataKey="day" stroke="#B0B0B0" />
+            <YAxis stroke="#B0B0B0" />
+            <Tooltip 
+              contentStyle={{ 
+                backgroundColor: '#1A1A1A', 
+                border: '1px solid #B0B0B0',
+                borderRadius: '8px',
+                color: '#FFFFFF'
+              }}
+            />
+            <Area 
+              type="monotone" 
+              dataKey="accuracy" 
+              stroke="#00C49F" 
+              fill="#00C49F" 
+              fillOpacity={0.3}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* AI Insights Overview */}
+      <div className="rounded-lg border p-4" style={{ backgroundColor: '#1A1A1A', borderColor: '#B0B0B0' }}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">AI Insights</h3>
+          <Brain className="h-5 w-5 text-blue-400" />
+        </div>
+        <ResponsiveContainer width="100%" height={150}>
+          <BarChart data={aiInsightsData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+            <XAxis dataKey="category" stroke="#B0B0B0" />
+            <YAxis stroke="#B0B0B0" />
+            <Tooltip 
+              contentStyle={{ 
+                backgroundColor: '#1A1A1A', 
+                border: '1px solid #B0B0B0',
+                borderRadius: '8px',
+                color: '#FFFFFF'
+              }}
+            />
+            <Bar dataKey="insights" fill="#FF6B6B" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -228,7 +452,7 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black bg-opacity-50 z-40"
+              className="fixed inset-0 bg-black bg-opacity-50 z-[10004]"
               onClick={onToggle}
             />
             
@@ -238,8 +462,9 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed right-0 top-0 h-full w-80 md:w-96 z-50 shadow-2xl"
+              className="fixed right-0 top-0 h-full w-80 md:w-96 z-[10005] shadow-2xl"
               style={{ backgroundColor: '#0D0D0D' }}
+              onClick={(e) => e.stopPropagation()}
             >
             <div className="h-full flex flex-col border-l" style={{ borderColor: '#B0B0B0' }}>
               {/* Header */}
@@ -250,7 +475,10 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => setIsCommandMode(!isCommandMode)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsCommandMode(!isCommandMode);
+                    }}
                     className={`p-2 rounded transition-colors ${
                       isCommandMode ? 'bg-[#FF3C3C] text-white' : 'text-[#B0B0B0] hover:bg-[#1A1A1A]'
                     }`}
@@ -259,14 +487,20 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                     {isCommandMode ? <Type className="h-4 w-4" /> : <Command className="h-4 w-4" />}
                   </button>
                   <button
-                    onClick={downloadInsights}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadInsights();
+                    }}
                     className="p-2 rounded text-[#B0B0B0] hover:bg-[#1A1A1A] transition-colors"
                     title="Download Insights"
                   >
                     <Download className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={clearHistory}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearHistory();
+                    }}
                     className="p-2 rounded text-[#B0B0B0] hover:bg-[#1A1A1A] transition-colors"
                     title="Clear History"
                   >
@@ -281,6 +515,42 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                 </div>
               </div>
 
+              {/* Enhanced Charts Section */}
+              {messages.length > 0 && (
+                <div className="p-4 border-b" style={{ borderColor: '#B0B0B0' }}>
+                  {renderEnhancedCharts()}
+                </div>
+              )}
+
+              {/* Search and Filter */}
+              {messages.length > 0 && (
+                <div className="p-4 border-b" style={{ borderColor: '#B0B0B0' }}>
+                  <div className="flex items-center space-x-2 mb-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search messages..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <select
+                      value={selectedFilter}
+                      onChange={(e) => setSelectedFilter(e.target.value)}
+                      className="px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="all">All</option>
+                      <option value="Authentication">Auth</option>
+                      <option value="Security">Security</option>
+                      <option value="Data Access">Data</option>
+                      <option value="Incident">Incident</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.length === 0 && (
@@ -290,7 +560,7 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                   </div>
                 )}
 
-                {messages.map((message) => (
+                {filteredMessages.map((message) => (
                   <motion.div
                     key={message.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -309,6 +579,18 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                         <div className="text-xs text-[#FFA500] mb-1 flex items-center">
                           <Command className="h-3 w-3 mr-1" />
                           Command Mode
+                        </div>
+                      )}
+                      {message.category && (
+                        <div className="text-xs text-blue-400 mb-1 flex items-center">
+                          <span className="px-2 py-1 rounded-full bg-blue-900 text-blue-200">
+                            {message.category}
+                          </span>
+                          {message.confidence && (
+                            <span className="ml-2 text-green-400">
+                              {Math.round(message.confidence)}% confidence
+                            </span>
+                          )}
                         </div>
                       )}
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -349,7 +631,10 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                     {suggestions.slice(0, 3).map((suggestion, index) => (
                       <button
                         key={index}
-                        onClick={() => handleSuggestionClick(suggestion)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSuggestionClick(suggestion);
+                        }}
                         className="w-full text-left p-2 rounded text-sm text-[#B0B0B0] hover:bg-[#1A1A1A] transition-colors"
                       >
                         {suggestion}
@@ -368,6 +653,7 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                      onClick={(e) => e.stopPropagation()}
                       placeholder={isCommandMode ? "Enter command..." : "Ask me anything..."}
                       className="w-full px-3 py-2 rounded-lg border bg-transparent text-white placeholder-[#B0B0B0] focus:outline-none focus:ring-2 focus:ring-[#FF3C3C]"
                       style={{ borderColor: '#B0B0B0' }}
@@ -379,7 +665,10 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                     )}
                   </div>
                   <button
-                    onClick={handleVoiceInput}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleVoiceInput();
+                    }}
                     className={`p-2 rounded transition-colors ${
                       isListening ? 'bg-red-500 text-white' : 'text-[#B0B0B0] hover:bg-[#1A1A1A]'
                     }`}
@@ -388,7 +677,10 @@ const AICopilotPanel: React.FC<AICopilotPanelProps> = ({ isOpen, onToggle, userR
                     {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </button>
                   <button
-                    onClick={handleSendMessage}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSendMessage();
+                    }}
                     disabled={!inputValue.trim()}
                     className="p-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ backgroundColor: inputValue.trim() ? '#FF3C3C' : '#1A1A1A' }}

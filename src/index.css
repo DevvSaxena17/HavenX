@@ -75,3 +75,8 @@
 .thin-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 60, 60, 0.8);
 }
+
+/* Ensure Recharts tooltips/overlays are always below modals */
+.recharts-tooltip-wrapper, .recharts-default-tooltip, .recharts-legend-wrapper {
+  z-index: 1000 !important;
+}

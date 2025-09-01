@@ -272,7 +272,7 @@ const CommandBar: React.FC<CommandBarProps> = ({ isOpen, onClose, userRole }) =>
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[10006] flex items-start justify-center pt-20"
           onClick={onClose}
         >
           <motion.div

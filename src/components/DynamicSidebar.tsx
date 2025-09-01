@@ -36,7 +36,8 @@ const DynamicSidebar: React.FC<{
   onTabChange: (tab: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-}> = ({ activeTab, onTabChange, isCollapsed, onToggleCollapse }) => {
+  onLogoutModalChange?: (isOpen: boolean) => void;
+}> = ({ activeTab, onTabChange, isCollapsed, onToggleCollapse, onLogoutModalChange }) => {
   const { user, logout } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -53,6 +54,7 @@ const DynamicSidebar: React.FC<{
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3, allowedRoles: ['admin'] },
     { id: 'users', label: 'Users', icon: Users, badge: 12, allowedRoles: ['admin'] },
     { id: 'ai-insights', label: 'AI Insights', icon: Brain, badge: badgeData['ai-insights'], allowedRoles: ['admin'] },
+    { id: 'live-tracking', label: 'Live Tracking', icon: Activity, allowedRoles: ['admin'] },
     { id: 'policies', label: 'Policies', icon: Settings, allowedRoles: ['admin'] },
     { id: 'reports', label: 'Reports', icon: FileText, allowedRoles: ['admin'] },
     { id: 'logs', label: 'Logs', icon: Activity, allowedRoles: ['admin'] },
@@ -74,15 +76,18 @@ const DynamicSidebar: React.FC<{
 
   const handleLogout = () => {
     setShowLogoutConfirm(true);
+    onLogoutModalChange?.(true);
   };
 
   const confirmLogout = () => {
     logout();
     setShowLogoutConfirm(false);
+    onLogoutModalChange?.(false);
   };
 
   const cancelLogout = () => {
     setShowLogoutConfirm(false);
+    onLogoutModalChange?.(false);
   };
 
   const filteredItems = sidebarItems.filter(item => 
@@ -103,7 +108,7 @@ const DynamicSidebar: React.FC<{
             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#FF3C3C' }}>
               <Shield className="w-5 h-5 text-white" />
             </div>
-            {!isCollapsed && <span className="text-xl font-bold text-white">ShadowHawk</span>}
+                          {!isCollapsed && <span className="text-xl font-bold text-white">HavenX</span>}
           </div>
           <button
             onClick={onToggleCollapse}
@@ -162,46 +167,39 @@ const DynamicSidebar: React.FC<{
         </nav>
 
         {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} ${isCollapsed ? 'px-2' : 'px-3'} py-2 rounded-lg transition-colors text-[#B0B0B0] hover:bg-[#1A1A1A] hover:text-white`}
-        >
-          <LogOut className="h-5 w-5" />
-          {!isCollapsed && <span>Logout</span>}
-        </button>
-        
-      </div>
-
-      {/* Logout Confirmation Modal */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="rounded-lg p-6 max-w-sm w-full mx-4" style={{ backgroundColor: '#1A1A1A', borderColor: '#B0B0B0', border: '1px solid #B0B0B0' }}>
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#FF3C3C' }}>
-                <LogOut className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Confirm Logout</h3>
-              <p className="text-[#B0B0B0] mb-6">Are you sure you want to logout?</p>
-              
-              <div className="flex space-x-3">
+        <div className="relative">
+          <button
+            onClick={handleLogout}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} ${isCollapsed ? 'px-2' : 'px-3'} py-2 rounded-lg transition-colors text-[#B0B0B0] hover:bg-[#1A1A1A] hover:text-white`}
+          >
+            <LogOut className="h-5 w-5" />
+            {!isCollapsed && <span>Logout</span>}
+          </button>
+          
+          {showLogoutConfirm && (
+            <div
+              className="absolute left-0 bottom-full mb-2 w-48 bg-[#181818] border border-[#B0B0B0] rounded-lg shadow-lg p-4 z-50"
+            >
+              <div className="mb-3 text-sm text-white text-center">Are you sure you want to logout?</div>
+              <div className="flex space-x-2">
                 <button
                   onClick={cancelLogout}
-                  className="flex-1 px-4 py-2 rounded-lg border transition-colors text-[#B0B0B0] border-[#B0B0B0] hover:bg-[#0D0D0D] hover:text-white"
+                  className="flex-1 px-3 py-2 rounded border border-[#B0B0B0] text-[#B0B0B0] hover:bg-[#232323]"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmLogout}
-                  className="flex-1 px-4 py-2 rounded-lg transition-colors text-white font-medium"
-                  style={{ backgroundColor: '#FF3C3C' }}
+                  className="flex-1 px-3 py-2 rounded bg-[#FF3C3C] text-white hover:bg-[#e22c2c]"
                 >
                   Logout
                 </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+        
+      </div>
     </aside>
   );
 };

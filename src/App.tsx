@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import DynamicSidebar from './components/DynamicSidebar';
 import AICopilotPanel from './components/AICopilotPanel';
-import CommandBar from './components/CommandBar';
 import ThreatIntelligence from './components/ThreatIntelligence';
 import ModularWidgets from './components/ModularWidgets';
-import NeonDashboardCard, { 
+import { 
   LiveThreatsCard, 
   RiskScoreCard, 
   AnomalousLoginsCard, 
@@ -16,43 +16,59 @@ import NeonDashboardCard, {
 import AdminPanel from './components/AdminPanel';
 import EmployeeDashboard from './components/EmployeeDashboard';
 import InternDashboard from './components/InternDashboard';
-import RoleGuard from './components/RoleGuard';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoadingState from './components/LoadingState';
+import RealTimeDataManager from './utils/realTimeDataManager';
 
 const AppContent: React.FC = () => {
   const { user, isAuthenticated, isLoading, login, error } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isAICopilotOpen, setIsAICopilotOpen] = useState(false);
-  const [isCommandBarOpen, setIsCommandBarOpen] = useState(false);
+  const [realTimeManager] = useState(() => RealTimeDataManager.getInstance());
+
+  // Track initial page view and activity
+  useEffect(() => {
+    if (user && isAuthenticated) {
+      realTimeManager.recordPageView('dashboard');
+    }
+  }, [user, isAuthenticated, realTimeManager]);
+
+  // Track tab changes
+  useEffect(() => {
+    if (user && isAuthenticated) {
+      realTimeManager.recordAction('tab_change', activeTab, { newTab: activeTab });
+    }
+  }, [activeTab, user, isAuthenticated, realTimeManager]);
+
+  // Track button interactions
+  const trackButtonClick = useCallback((buttonName: string, action: string) => {
+    if (user && isAuthenticated) {
+      realTimeManager.recordAction(`button_click_${buttonName}`, activeTab, { action, buttonName });
+    }
+  }, [user, isAuthenticated, activeTab, realTimeManager]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+K or Ctrl+K for command bar
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsCommandBarOpen(true);
-      }
-      
       // Escape to close modals
       if (e.key === 'Escape') {
-        setIsCommandBarOpen(false);
         setIsAICopilotOpen(false);
+        trackButtonClick('escape', 'close_modals');
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [trackButtonClick]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0D0D0D' }}>
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#FF3C3C] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white">Loading ShadowHawk...</p>
-        </div>
-      </div>
+      <LoadingState 
+        message="Loading HavenX..." 
+        size="lg" 
+        fullScreen 
+      />
     );
   }
 
@@ -65,9 +81,9 @@ const AppContent: React.FC = () => {
     if (user?.role === 'admin') {
       return <AdminPanel activeTab={activeTab} onTabChange={setActiveTab} />;
     } else if (user?.role === 'analyst') {
-      return <EmployeeDashboard />;
+      return <EmployeeDashboard activeTab={activeTab} onTabChange={setActiveTab} />;
     } else if (user?.role === 'viewer') {
-      return <InternDashboard />;
+      return <InternDashboard activeTab={activeTab} onTabChange={setActiveTab} />;
     } else {
       // Default dashboard with advanced features
       return (
@@ -78,12 +94,6 @@ const AppContent: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white">Advanced Dashboard</h1>
                 <div className="flex items-center space-x-4">
                   <button
-                    onClick={() => setIsCommandBarOpen(true)}
-                    className="px-4 py-2 rounded-lg border bg-transparent text-[#B0B0B0] border-[#B0B0B0] hover:bg-[#1A1A1A] transition-colors"
-                  >
-                    ⌘K Search
-                  </button>
-                  <button
                     onClick={() => setIsAICopilotOpen(true)}
                     className="px-4 py-2 rounded-lg border bg-transparent text-[#B0B0B0] border-[#B0B0B0] hover:bg-[#1A1A1A] transition-colors"
                   >
@@ -92,12 +102,12 @@ const AppContent: React.FC = () => {
                 </div>
               </div>
 
-              {/* Neon Dashboard Cards */}
+              {/* Real-Time Dashboard Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <LiveThreatsCard count={15} change={12} />
-                <RiskScoreCard score={85} change={8} />
-                <AnomalousLoginsCard count={8} change={-3} />
-                <ActiveUsersCard count={1250} change={5} />
+                <LiveThreatsCard />
+                <RiskScoreCard />
+                <AnomalousLoginsCard />
+                <ActiveUsersCard />
               </div>
 
               {/* Threat Intelligence */}
@@ -122,7 +132,7 @@ const AppContent: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="rounded-lg p-6 border" style={{ backgroundColor: '#1A1A1A', borderColor: '#B0B0B0' }}>
                   <h3 className="text-lg font-semibold text-white mb-4">System Health Overview</h3>
-                  <SystemHealthCard status="Healthy" uptime="99.9%" />
+                  <SystemHealthCard />
                 </div>
                 <div className="rounded-lg p-6 border" style={{ backgroundColor: '#1A1A1A', borderColor: '#B0B0B0' }}>
                   <h3 className="text-lg font-semibold text-white mb-4">Performance Metrics</h3>
@@ -158,19 +168,16 @@ const AppContent: React.FC = () => {
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
       
-      <main className={`flex-1 p-0 transition-all duration-300 overflow-auto ${isSidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+      <main
+        className={`flex-1 p-0 transition-all duration-300 overflow-auto ${isSidebarCollapsed ? 'ml-16' : 'ml-64'}`}
+      >
         {renderDashboardContent()}
       </main>
-
+      
+      {/* AI Copilot Panel */}
       <AICopilotPanel
         isOpen={isAICopilotOpen}
         onToggle={() => setIsAICopilotOpen(!isAICopilotOpen)}
-        userRole={user?.role || 'viewer'}
-      />
-
-      <CommandBar
-        isOpen={isCommandBarOpen}
-        onClose={() => setIsCommandBarOpen(false)}
         userRole={user?.role || 'viewer'}
       />
     </div>
@@ -179,9 +186,55 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <div className="relative">
+          <AppContent />
+          
+          {/* Toast Notifications */}
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1A1A1A',
+                color: '#FFFFFF',
+                border: '1px solid #B0B0B0',
+                borderRadius: '8px',
+                fontSize: '14px',
+              },
+              success: {
+                iconTheme: {
+                  primary: '#22C55E',
+                  secondary: '#FFFFFF',
+                },
+                style: {
+                  border: '1px solid #22C55E',
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: '#FF3C3C',
+                  secondary: '#FFFFFF',
+                },
+                style: {
+                  border: '1px solid #FF3C3C',
+                },
+              },
+              loading: {
+                iconTheme: {
+                  primary: '#FF3C3C',
+                  secondary: '#FFFFFF',
+                },
+                style: {
+                  border: '1px solid #FF3C3C',
+                },
+              },
+            }}
+          />
+        </div>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 

@@ -48,14 +48,14 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ isOpen, onClose, anal
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-[10005]">
       <div className="absolute top-0 right-0 w-96 h-full bg-gray-900 border-l border-gray-700 shadow-2xl">
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <div className="flex items-center space-x-2">
               <Brain className="h-6 w-6 text-blue-400" />
-              <h2 className="text-lg font-bold">ShadowHawk AI</h2>
+              <h2 className="text-lg font-bold">HavenX AI</h2>
             </div>
             <button
               onClick={onClose}
@@ -100,7 +100,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ isOpen, onClose, anal
             {activeMode === 'report' ? (
               <div className="p-4 space-y-4 overflow-y-auto h-full">
                 <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <h3 className="text-sm font-semibold text-blue-400 mb-2">🧠 ShadowHawk AI Threat Report</h3>
+                  <h3 className="text-sm font-semibold text-blue-400 mb-2">🧠 HavenX AI Threat Report</h3>
                 </div>
 
                 <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
@@ -193,7 +193,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ isOpen, onClose, anal
                       type="text"
                       value={chatMessage}
                       onChange={(e) => setChatMessage(e.target.value)}
-                      placeholder="Ask ShadowHawk AI..."
+                      placeholder="Ask HavenX AI..."
                       className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
