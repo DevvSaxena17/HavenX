@@ -132,6 +132,22 @@ const InternDashboard: React.FC<{
   const currentUser = user ? csvManager.getUserByUsername(user.username) : null;
   const userActivities = currentUser ? csvManager.getUserActivities(currentUser.id) : [];
   
+  // Enhanced mock data for intern with Hindi names
+  const getActivityLogs = () => {
+    if (!currentUser) return [];
+    
+    const now = new Date();
+    return [
+      { action: 'Logged in', time: timeUtils.formatForActivity(new Date(now.getTime() - 3 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
+      { action: 'Logged out', time: timeUtils.formatForActivity(new Date(now.getTime() - 19 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
+      { action: 'Logged in', time: timeUtils.formatForActivity(new Date(now.getTime() - 15 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
+      { action: 'Accessed Training Materials', time: timeUtils.formatForActivity(new Date(now.getTime() - 13.5 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
+      { action: 'Downloaded Manual', time: timeUtils.formatForActivity(new Date(now.getTime() - 9.75 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'medium' },
+    ];
+  };
+
+  const basicLogs = getActivityLogs();
+  
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -198,7 +214,7 @@ const InternDashboard: React.FC<{
   
   // Auto-refresh functionality
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: number;
     if (autoRefresh && consentGiven) {
       interval = setInterval(() => {
         setLastRefresh(new Date());
@@ -277,22 +293,6 @@ const InternDashboard: React.FC<{
     { icon: Eye, label: 'Compact View', action: () => setCompactView(!compactView), shortcut: 'Ctrl+K' },
     { icon: Bell, label: 'Auto Refresh', action: () => setAutoRefresh(!autoRefresh), shortcut: 'Ctrl+A' }
   ];
-
-  // Enhanced mock data for intern with Hindi names
-  const getActivityLogs = () => {
-    if (!currentUser) return [];
-    
-    const now = new Date();
-    return [
-      { action: 'Logged in', time: timeUtils.formatForActivity(new Date(now.getTime() - 3 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
-      { action: 'Logged out', time: timeUtils.formatForActivity(new Date(now.getTime() - 19 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
-      { action: 'Logged in', time: timeUtils.formatForActivity(new Date(now.getTime() - 15 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
-      { action: 'Accessed Training Materials', time: timeUtils.formatForActivity(new Date(now.getTime() - 13.5 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'low' },
-      { action: 'Downloaded Manual', time: timeUtils.formatForActivity(new Date(now.getTime() - 9.75 * 60 * 60 * 1000)), device: 'Windows PC', ip: '192.168.1.103', location: 'Office', riskLevel: 'medium' },
-    ];
-  };
-
-  const basicLogs = getActivityLogs();
 
   const securityTips = [
     {
@@ -1137,7 +1137,7 @@ const InternDashboard: React.FC<{
       logSecurityEvent({
         type: 'ai_query_error',
         severity: 'medium',
-        details: { query: aiQuery, error: error.message, userId: user?.id }
+        details: { query: aiQuery, error: error instanceof Error ? error.message : String(error), userId: user?.id }
       });
     } finally {
       setIsAiLoading(false);
